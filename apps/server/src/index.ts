@@ -1,13 +1,13 @@
-import { Hono } from "hono";
+import { env } from "./lib/env";
+import { createApp } from "./app";
 
-export const main = () => {
-  const server = new Hono();
+const main = async () => {
+  const app = await createApp();
 
-  const port = 3001;
-  console.log("Server is running on port:", port);
+  console.log("The server is running on port:", env.SERVER_API_PORT);
   Bun.serve({
-    fetch: server.fetch,
-    port,
+    fetch: app.fetch,
+    port: env.SERVER_API_PORT,
   });
 };
 
