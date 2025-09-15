@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "bun run --watch src/index.ts",
+    "build": "bun build --compile ./src/index.ts --outfile saas-starter",
     "ts:check": "tsc --noEmit"
   },
   "devDependencies": {
@@ -15,10 +16,11 @@
     "tsx": "^4.20.5"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.2",
+    "@react-email/render": "^1.2.3",
     "@saas-starter/shared-constants": "workspace:*",
     "@saas-starter/shared-validations": "workspace:*",
     "bcryptjs": "^3.0.2",

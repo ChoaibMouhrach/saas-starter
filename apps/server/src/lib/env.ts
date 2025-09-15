@@ -5,7 +5,7 @@ const schema = z.object({
   NODE_ENV: z.union([z.literal("production"), z.literal("development")]),
 
   // API
-  SERVER_API_PORT: z.url(),
+  SERVER_API_PORT: z.string().transform(Number),
   SERVER_CLIENT_URL: z.url(),
   VITE_API_URL: z.url(),
 
