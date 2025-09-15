@@ -1,0 +1,23 @@
+{
+  "name": "saas-starter",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --elide-lines=0 --filter='*' dev",
+    "db:generate": "bun --elide-lines=0 --filter='*' db:generate",
+    "db:migrate": "bun --elide-lines=0 --filter='*' db:migrate",
+    "db:studio": "bun --elide-lines=0 --filter='*' db:studio",
+    "containers:up": "docker compose up",
+    "containers:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@saas-starter/server",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "hono": "^4.9.7",
+    "@saas-starter/shared-constants": "workspace:*",
+    "@saas-starter/shared-validations": "workspace:*"
+  }
+}
