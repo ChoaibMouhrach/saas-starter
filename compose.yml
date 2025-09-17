@@ -1,0 +1,11 @@
+services:
+  soda-db:
+    image: postgres:latest
+    container_name: ${SERVER_DATABASE_NAME}
+    restart: always
+    environment:
+      POSTGRES_USER: ${SERVER_DATABASE_USER}
+      POSTGRES_PASSWORD: ${SERVER_DATABASE_PASS}
+      POSTGRES_DB: ${SERVER_DATABASE_NAME}
+    ports:
+      - ${SERVER_DATABASE_PORT}:5432

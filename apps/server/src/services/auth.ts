@@ -5,12 +5,7 @@ import { HTTP_ERROR_CODES } from "@saas-starter/shared-constants";
 import { env } from "../lib/env";
 
 export class AuthService extends BaseService {
-  public signIn(payload: {
-    email: string;
-    password: string;
-    clientId: string;
-    redirectUrl: string;
-  }) {
+  public signIn(payload: { email: string; password: string }) {
     return this.database.transaction(async (tx) => {
       const user = await tx.user.findFirstOrThrow({
         where: {
@@ -36,6 +31,12 @@ export class AuthService extends BaseService {
           statusCode: 409,
         });
       }
+
+      const session = await user.sessions.createFirst({});
+
+      return {
+        session,
+      };
     });
   }
 
@@ -44,12 +45,7 @@ export class AuthService extends BaseService {
     return await bcrypt.hash(password, salt);
   }
 
-  public signUp(payload: {
-    email: string;
-    password: string;
-    clientId: string;
-    redirectUrl: string;
-  }) {
+  public signUp(payload: { email: string; password: string }) {
     return this.database.transaction(async (tx) => {
       let user = await tx.user.findFirst({
         where: {
@@ -85,8 +81,6 @@ export class AuthService extends BaseService {
 
       const url = new URL("/api/auth/confirm-email-address", env.VITE_API_URL);
       url.searchParams.set("token", token.data.token);
-      url.searchParams.set("clientId", payload.clientId);
-      url.searchParams.set("redirectUrl", payload.redirectUrl);
 
       await this.tools.mailer.sendMail({
         from: "auth",
@@ -97,11 +91,7 @@ export class AuthService extends BaseService {
     });
   }
 
-  public confirmEmail(payload: {
-    token: string;
-    clientId: string;
-    redirectUrl: string;
-  }) {
+  public confirmEmail(payload: { token: string }) {
     return this.database.transaction(async (tx) => {
       const token = await tx.token.findFirst({
         where: {
@@ -126,15 +116,17 @@ export class AuthService extends BaseService {
       // remove token
       await token.remove();
 
-      await token.user.findFirstOrThrow();
+      const user = await token.user.findFirstOrThrow();
+
+      const session = await user.sessions.createFirst({});
+
+      return {
+        session,
+      };
     });
   }
 
-  public requestPasswordReset(payload: {
-    email: string;
-    clientId: string;
-    redirectUrl: string;
-  }) {
+  public requestPasswordReset(payload: { email: string }) {
     return this.database.transaction(async (tx) => {
       const user = await tx.user.findFirstOrThrow({
         where: {
@@ -152,8 +144,6 @@ export class AuthService extends BaseService {
 
       const url = new URL("/reset-password", env.SERVER_CLIENT_URL);
       url.searchParams.set("token", token.data.token);
-      url.searchParams.set("clientId", payload.clientId);
-      url.searchParams.set("redirectUrl", payload.redirectUrl);
 
       await this.tools.mailer.sendMail({
         from: "auth",
@@ -164,12 +154,7 @@ export class AuthService extends BaseService {
     });
   }
 
-  public resetPassword(payload: {
-    token: string;
-    password: string;
-    clientId: string;
-    redirectUrl: string;
-  }) {
+  public resetPassword(payload: { token: string; password: string }) {
     return this.database.transaction(async (tx) => {
       const token = await tx.token.findFirstOrThrow({
         where: {
@@ -192,8 +177,15 @@ export class AuthService extends BaseService {
       const user = await token.user.findFirstOrThrow();
 
       await user.passwords.remove();
+
       const hashedPassword = await this.hashPassword(payload.password);
       await user.passwords.createFirst({ password: hashedPassword });
+
+      const session = await user.sessions.createFirst({});
+
+      return {
+        session,
+      };
     });
   }
 

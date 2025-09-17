@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import type { AppContext } from "../context";
 import { zValidator } from "@hono/zod-validator";
 import {
-  appQuerySchema,
   requestPasswordResetSchema,
   resetPasswordSchema,
   signInSchema,
@@ -10,41 +9,40 @@ import {
 } from "@saas-starter/shared-validations";
 import { authMiddleware } from "../middlewares/auth";
 import z from "zod";
+import { setCookie } from "hono/cookie";
+import { AUTH_SESSION_COOKIE_NAME } from "../lib/constants";
+import { env } from "../lib/env";
 
 export const authController = new Hono<AppContext>()
-  .post(
-    "/sign-in",
-    zValidator("json", signInSchema),
-    zValidator("query", appQuerySchema),
-    async (context) => {
-      const body = context.req.valid("json");
-      const services = context.get("context").services;
-      const { clientId, redirectUrl } = context.req.valid("query");
+  .post("/sign-in", zValidator("json", signInSchema), async (context) => {
+    const body = context.req.valid("json");
+    const services = context.get("context").services;
 
-      await services.auth.signIn({
-        email: body.email,
-        password: body.password,
-        clientId,
-        redirectUrl,
-      });
+    const { session } = await services.auth.signIn({
+      email: body.email,
+      password: body.password,
+    });
 
-      return context.json({});
-    }
-  )
+    setCookie(context, AUTH_SESSION_COOKIE_NAME, session.data.session, {
+      httpOnly: true,
+      secure: env.NODE_ENV === "production", // HTTPS only in production
+      sameSite: env.NODE_ENV === "production" ? "strict" : "lax", // Stricter in prod
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+    });
+
+    return context.json({});
+  })
 
   .post(
     "/request-password-reset",
     zValidator("json", requestPasswordResetSchema),
-    zValidator("query", appQuerySchema),
     async (context) => {
       const body = context.req.valid("json");
       const services = context.get("context").services;
-      const { clientId, redirectUrl } = context.req.valid("query");
 
       await services.auth.requestPasswordReset({
         email: body.email,
-        redirectUrl,
-        clientId,
       });
 
       return context.body(null, 204);
@@ -54,57 +52,61 @@ export const authController = new Hono<AppContext>()
   .post(
     "/reset-password",
     zValidator("json", resetPasswordSchema),
-    zValidator("query", appQuerySchema.extend({ token: z.uuid() })),
+    zValidator("query", z.object({ token: z.uuid() })),
     async (context) => {
       const services = context.get("context").services;
       const body = context.req.valid("json");
-      const { clientId, redirectUrl, token } = context.req.valid("query");
+      const { token } = context.req.valid("query");
 
-      await services.auth.resetPassword({
+      const { session } = await services.auth.resetPassword({
         token,
-        clientId,
-        redirectUrl,
         password: body.password,
       });
 
-      return context.json({});
-    }
-  )
-
-  .post(
-    "/sign-up",
-    zValidator("json", signUpSchema),
-    zValidator("query", appQuerySchema),
-    async (context) => {
-      const { services } = context.get("context");
-      const body = context.req.valid("json");
-      const { clientId, redirectUrl } = context.req.valid("query");
-
-      await services.auth.signUp({
-        clientId,
-        redirectUrl,
-        email: body.email,
-        password: body.password,
+      setCookie(context, AUTH_SESSION_COOKIE_NAME, session.data.session, {
+        httpOnly: true,
+        secure: env.NODE_ENV === "production", // HTTPS only in production
+        sameSite: env.NODE_ENV === "production" ? "strict" : "lax", // Stricter in prod
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
       });
 
       return context.body(null, 204);
     }
   )
 
+  .post("/sign-up", zValidator("json", signUpSchema), async (context) => {
+    const { services } = context.get("context");
+    const body = context.req.valid("json");
+
+    await services.auth.signUp({
+      email: body.email,
+      password: body.password,
+    });
+
+    return context.body(null, 204);
+  })
+
   .get(
     "/confirm-email-address",
-    zValidator("query", appQuerySchema.extend({ token: z.uuid() })),
+    zValidator("query", z.object({ token: z.uuid() })),
     async (context) => {
       const services = context.get("context").services;
-      const { token, clientId, redirectUrl } = context.req.valid("query");
+      const { token } = context.req.valid("query");
 
-      await services.auth.confirmEmail({
+      const { session } = await services.auth.confirmEmail({
         token,
-        clientId,
-        redirectUrl,
       });
 
-      return context.json({});
+      setCookie(context, AUTH_SESSION_COOKIE_NAME, session.data.session, {
+        httpOnly: true,
+        secure: env.NODE_ENV === "production", // HTTPS only in production
+        sameSite: env.NODE_ENV === "production" ? "strict" : "lax", // Stricter in prod
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
+
+      return context.redirect(env.SERVER_CLIENT_URL);
     }
   )
 

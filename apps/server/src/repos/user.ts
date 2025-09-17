@@ -4,10 +4,12 @@ import { BaseRepo, BaseRepoInstance } from "../lib/repo";
 import { HTTP_ERROR_CODES } from "@saas-starter/shared-constants";
 import { usersTable, type TUser, type TUsersTable } from "../database/schema";
 import { TokenRepo } from "./token";
+import { SessionRepo } from "./session";
 
 export class UserInstance extends BaseRepoInstance<TUsersTable> {
   public passwords;
   public tokens;
+  public sessions;
 
   public constructor(options: { data: TUser; repo: UserRepo }) {
     super(options);
@@ -18,6 +20,11 @@ export class UserInstance extends BaseRepoInstance<TUsersTable> {
     );
 
     this.tokens = new TokenRepo(
+      { dbClient: options.repo.dbClient },
+      { userId: options.data.id }
+    );
+
+    this.sessions = new SessionRepo(
       { dbClient: options.repo.dbClient },
       { userId: options.data.id }
     );
