@@ -2,21 +2,48 @@ import { rootRoute } from "./root";
 import { AuthLayout } from "@/pages/(auth)/layout";
 import { SignInPage } from "@/pages/(auth)/sign-in/page";
 import { SignUpPage } from "@/pages/(auth)/sign-up/page";
-import { ProfilePage } from "@/pages/(auth)/profile/page";
-import { createRoute, Outlet } from "@tanstack/react-router";
-import { ConfirmEmailPage } from "@/pages/(auth)/confirm-email/page";
+import {
+  createRoute,
+  Outlet,
+  redirect,
+  isRedirect,
+} from "@tanstack/react-router";
+import { ConfirmEmailPage } from "@/pages/(public)/confirm-email/page";
 import { ResetPasswordPage } from "@/pages/(auth)/reset-password/page";
 import { RequestPasswordReset } from "@/pages/(auth)/request-password-reset copy/request-password-reset";
 import z from "zod";
+import { api } from "@/api";
+import { CustomApiError } from "@/lib/base-api";
 
 export const authLayout = createRoute({
+  id: "auth-layout",
+  getParentRoute: () => rootRoute,
   component: () => (
     <AuthLayout>
       <Outlet />
     </AuthLayout>
   ),
-  getParentRoute: () => rootRoute,
-  id: "auth-layout",
+  beforeLoad: async () => {
+    try {
+      await api.auth.getAuthUser();
+
+      throw redirect({
+        to: "/dashboard",
+      });
+    } catch (error) {
+      if (error instanceof CustomApiError && error.statusCode === 401) {
+        return;
+      }
+
+      if (isRedirect(error)) {
+        throw error;
+      }
+
+      throw redirect({
+        to: "/error",
+      });
+    }
+  },
 });
 
 export const signInRoute = createRoute({
@@ -46,23 +73,9 @@ export const resetPasswordRoute = createRoute({
   }),
 });
 
-export const confirmEmailRoute = createRoute({
-  getParentRoute: () => authLayout,
-  component: () => <ConfirmEmailPage />,
-  path: "/confirm-email",
-});
-
-export const profileRoute = createRoute({
-  getParentRoute: () => authLayout,
-  component: () => <ProfilePage />,
-  path: "/profile",
-});
-
 export const authRouteTree = authLayout.addChildren([
   requestPasswordResetRoute,
   resetPasswordRoute,
-  confirmEmailRoute,
-  profileRoute,
   signInRoute,
   signUpRoute,
 ]);

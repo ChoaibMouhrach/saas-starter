@@ -16,6 +16,9 @@ const schema = z.object({
   SERVER_DATABASE_HOST: z.string(),
   SERVER_DATABASE_PORT: z.string().transform(Number),
 
+  // JWT
+  SERVER_JWT_SECRET: z.string().min(16),
+
   // RESEND
   SERVER_RESEND_TOKEN: z.string(),
 });

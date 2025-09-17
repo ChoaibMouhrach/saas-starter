@@ -38,3 +38,12 @@ export const appQuerySchema = z.object({
   clientId: z.uuid(),
   redirectUrl: z.url(),
 });
+
+export const changePasswordSchema = z.object({
+  password: z.string().min(8).max(60),
+  newPassword: z.string().min(8).max(60),
+});
+
+export const changeEmailSchema = z.object({
+  email: z.email(),
+});

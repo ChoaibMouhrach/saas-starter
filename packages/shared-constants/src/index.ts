@@ -17,6 +17,9 @@ export const HTTP_ERROR_CODES = {
   // UNAUTHORIZED
   UNAUTHORIZED: "unauthorized",
 
+  // UNAUTHORIZED
+  EMAIL_ADDRESS_IN_USE: "email-address-in-use",
+
   // INTERNAL SERVER ERROR
   INTERNAL_SERVER_ERROR: "internal-server-error",
 } as const;

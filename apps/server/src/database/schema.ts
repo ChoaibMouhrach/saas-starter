@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { id, timestamps } from "./utils";
+import { TOKEN_TYPES, TOKEN_TYPES_VALUES } from "../lib/constants";
 
 export const usersTable = pgTable("users", {
   id: id(),
@@ -61,8 +62,10 @@ export const passwordRelations = relations(passwordsTable, ({ one }) => ({
 }));
 
 export const tokenTypesEnum = pgEnum("tokenTypesEnum", [
-  "email-confirmation",
-  "request-password-reset",
+  TOKEN_TYPES.EMAIL_CONFIRMATION,
+  ...TOKEN_TYPES_VALUES.filter(
+    (type) => type !== TOKEN_TYPES.EMAIL_CONFIRMATION
+  ),
 ]);
 
 export const tokensTable = pgTable("tokens", {
@@ -70,7 +73,7 @@ export const tokensTable = pgTable("tokens", {
 
   // -- fields
   type: tokenTypesEnum().notNull(),
-  token: uuid().notNull().defaultRandom(),
+  token: text().notNull(),
 
   // -- references
   userId: userId(),

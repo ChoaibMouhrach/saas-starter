@@ -3,6 +3,12 @@ import { AppError, UnauthorizedError } from "../lib/error";
 import { BaseService } from "../lib/service";
 import { HTTP_ERROR_CODES } from "@saas-starter/shared-constants";
 import { env } from "../lib/env";
+import type { UserInstance } from "../repos/user";
+import jwt from "jsonwebtoken";
+import {
+  TOKEN_TYPES,
+  type EMAIL_CHANGE_CONFIRMATION_TOKEN_PAYLOAD,
+} from "../lib/constants";
 
 export class AuthService extends BaseService {
   public signIn(payload: { email: string; password: string }) {
@@ -77,6 +83,7 @@ export class AuthService extends BaseService {
 
       const token = await user.tokens.createFirst({
         type: "email-confirmation",
+        token: crypto.randomUUID(),
       });
 
       const url = new URL("/api/auth/confirm-email-address", env.VITE_API_URL);
@@ -140,6 +147,7 @@ export class AuthService extends BaseService {
 
       const token = await user.tokens.createFirst({
         type: "request-password-reset",
+        token: crypto.randomUUID(),
       });
 
       const url = new URL("/reset-password", env.SERVER_CLIENT_URL);
@@ -209,7 +217,120 @@ export class AuthService extends BaseService {
 
       return {
         user,
+        session,
       };
+    });
+  }
+
+  public requestEmailChange(payload: { user: UserInstance; email: string }) {
+    return this.database.transaction(async (tx) => {
+      const user = await tx.user.findFirst({
+        where: {
+          field: {
+            email: {
+              eq: payload.email,
+            },
+          },
+        },
+      });
+
+      if (user) {
+        throw new AppError({
+          statusCode: 409,
+          code: HTTP_ERROR_CODES.EMAIL_ADDRESS_IN_USE,
+          message: "a user with this email address already exists",
+        });
+      }
+
+      const tokensRepo = payload.user.tokens;
+      tokensRepo.dbClient = tx.dbClient;
+
+      const tokenType = TOKEN_TYPES.CHANGE_EMAIL;
+
+      const tokenPayload: EMAIL_CHANGE_CONFIRMATION_TOKEN_PAYLOAD = {
+        email: payload.email,
+        type: tokenType,
+      };
+
+      const token = jwt.sign(tokenPayload, env.SERVER_JWT_SECRET);
+
+      await tokensRepo.createFirst({
+        type: tokenType,
+        token,
+      });
+
+      const url = new URL("/api/auth/confirm-email-change", env.VITE_API_URL);
+      url.searchParams.set("token", token);
+
+      await this.tools.mailer.sendMail({
+        from: "auth",
+        to: [payload.email],
+        subject: "Change email address request confirmation",
+        html: `<a href="${url.toString()}" >Confirm changing email address</a>`,
+      });
+    });
+  }
+
+  public changeEmail(payload: { token: string }) {
+    return this.database.transaction(async (tx) => {
+      const token = await tx.token.findFirstOrThrow({
+        where: {
+          field: {
+            token: {
+              eq: payload.token,
+            },
+          },
+        },
+      });
+
+      let tokenData = jwt.verify(
+        token.data.token,
+        env.SERVER_JWT_SECRET
+      ) as EMAIL_CHANGE_CONFIRMATION_TOKEN_PAYLOAD;
+
+      if (
+        token.data.type !== TOKEN_TYPES.CHANGE_EMAIL ||
+        tokenData.type !== TOKEN_TYPES.CHANGE_EMAIL
+      ) {
+        throw new AppError({
+          code: HTTP_ERROR_CODES.INCORRECT_TOKEN_TYPE,
+          message: "invalid token type",
+          statusCode: 409,
+        });
+      }
+
+      const user = await token.user.findFirstOrThrow();
+      user.data.email = tokenData.email;
+      await user.save();
+    });
+  }
+
+  public changePassword(payload: {
+    user: UserInstance;
+    password: string;
+    newPassword: string;
+  }) {
+    return this.database.transaction(async (tx) => {
+      const passwordsRepo = payload.user.passwords;
+      passwordsRepo.dbClient = tx.dbClient;
+
+      const password = await passwordsRepo.findFirstOrThrow();
+
+      const isPasswordCorrect = await bcrypt.compare(
+        payload.password,
+        password.data.password
+      );
+
+      if (!isPasswordCorrect) {
+        throw new AppError({
+          code: HTTP_ERROR_CODES.PASSWORD_INCORRECT,
+          message: "the password is not correct",
+          statusCode: 409,
+        });
+      }
+
+      password.data.password = await this.hashPassword(payload.newPassword);
+      await password.save();
     });
   }
 }

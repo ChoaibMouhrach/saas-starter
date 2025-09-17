@@ -4,6 +4,7 @@ import { Service } from "./services";
 import { createDrizzle } from "./lib/drizzle";
 import { DevMailer, ResendMailer } from "./lib/mailer";
 import type { UserInstance } from "./repos/user";
+import type { SessionInstance } from "./repos/session";
 
 export const createContext = async () => {
   const { dbClient } = createDrizzle();
@@ -42,6 +43,7 @@ export type AuthAppContext = {
   Variables: AppContext["Variables"] & {
     auth: {
       user: UserInstance;
+      session: SessionInstance;
     };
   };
 };

@@ -27,16 +27,24 @@ export class AuthApi extends BaseApi {
     });
   }
 
-  // public signOut() {
-  //   return this.request(() => {
-  //     return apiClient.api.auth["sign-out"].$post();
-  //   });
-  // }
+  public signOut() {
+    return this.request(() => {
+      return apiClient.api.auth["sign-out"].$post();
+    });
+  }
 
   public getAuthUser() {
     return this.request(() => {
       return apiClient.api.auth["user"].$get();
     });
+  }
+
+  public changePassword(payload: ChangePasswordPayload) {
+    return this.request(() => changePassword(payload));
+  }
+
+  public requestEmailChange(payload: RequestEmailChangePayload) {
+    return this.request(() => requestEmailChange(payload));
   }
 }
 
@@ -54,3 +62,9 @@ type RequestPasswordResetPayload = InferRequestType<
 
 const resetPasswordApi = apiClient.api.auth["reset-password"].$post;
 type ResetPasswordPayload = InferRequestType<typeof resetPasswordApi>;
+
+const requestEmailChange = apiClient.api.auth["request-email-change"].$post;
+type RequestEmailChangePayload = InferRequestType<typeof requestEmailChange>;
+
+const changePassword = apiClient.api.auth["change-password"].$post;
+type ChangePasswordPayload = InferRequestType<typeof changePassword>;
