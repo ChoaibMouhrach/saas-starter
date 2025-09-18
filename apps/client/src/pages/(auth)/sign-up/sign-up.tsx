@@ -1,5 +1,6 @@
 import { api } from "@/api";
 import { CustomButton } from "@/components/custom/custom-button";
+import { PasswordInput } from "@/components/custom/password-input";
 import {
   Form,
   FormControl,
@@ -100,7 +101,7 @@ export const SignUp = () => {
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input {...field} placeholder="********" type="password" />
+                <PasswordInput {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -114,7 +115,7 @@ export const SignUp = () => {
             <FormItem>
               <FormLabel>Password confirmation</FormLabel>
               <FormControl>
-                <Input {...field} placeholder="********" type="password" />
+                <PasswordInput {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

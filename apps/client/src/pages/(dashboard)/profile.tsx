@@ -10,9 +10,11 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ChevronsUpDownIcon,
   DoorOpenIcon,
-  Loader2,
+  Laptop2Icon,
   Loader2Icon,
+  MoonIcon,
   SettingsIcon,
+  SunIcon,
 } from "lucide-react";
 import { CustomButton } from "@/components/custom/custom-button";
 import { dashboardLayout } from "@/routes/dashboard";
@@ -20,6 +22,8 @@ import { useMutation } from "@tanstack/react-query";
 import { api } from "@/api";
 import { CustomApiError } from "@/lib/base-api";
 import { toast } from "sonner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useTheme } from "@/components/custom/theme-provider";
 
 export const Profile = () => {
   const { user } = dashboardLayout.useRouteContext();
@@ -49,6 +53,10 @@ export const Profile = () => {
         </DropdownMenuItem>
 
         <SignOut />
+
+        <DropdownMenuSeparator />
+
+        <SwitchTheme />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -81,5 +89,30 @@ const SignOut = () => {
       )}{" "}
       Sign out
     </DropdownMenuItem>
+  );
+};
+
+const SwitchTheme = () => {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <ToggleGroup
+      type="single"
+      className="w-auto"
+      size="sm"
+      variant="outline"
+      value={theme}
+      onValueChange={setTheme}
+    >
+      <ToggleGroupItem value="light">
+        <SunIcon size={16} />
+      </ToggleGroupItem>
+      <ToggleGroupItem value="system">
+        <Laptop2Icon size={16} />
+      </ToggleGroupItem>
+      <ToggleGroupItem value="dark">
+        <MoonIcon size={16} />
+      </ToggleGroupItem>
+    </ToggleGroup>
   );
 };
