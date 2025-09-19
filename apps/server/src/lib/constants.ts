@@ -1,3 +1,7 @@
+// 30 days
+export const AUTH_SESSION_EXPIRATION_DURATION_IN_MS = 30 * 24 * 60 * 60 * 1000;
+export const AUTH_EMAIL_CONFIRMATION_DURATION_IN_MS = 1 * 24 * 60 * 60 * 1000;
+
 export const AUTH_SESSION_COOKIE_NAME = "session";
 
 export const TOKEN_TYPES = {

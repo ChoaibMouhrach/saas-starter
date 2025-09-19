@@ -1,19 +1,46 @@
 import bcrypt from "bcryptjs";
-import { AppError, UnauthorizedError } from "../lib/error";
-import { BaseService } from "../lib/service";
-import { HTTP_ERROR_CODES } from "@saas-starter/shared-constants";
-import { env } from "../lib/env";
-import type { UserInstance } from "../repos/user";
 import jwt from "jsonwebtoken";
+import { env } from "../lib/env";
+import { BaseService } from "../lib/service";
+import { UserInstance, UserRepo } from "../repos/user";
+import { HTTP_ERROR_CODES } from "@saas-starter/shared-constants";
+import { AppError, ClientRedirectError, UnauthorizedError } from "../lib/error";
 import {
+  AUTH_EMAIL_CONFIRMATION_DURATION_IN_MS,
+  AUTH_SESSION_COOKIE_NAME,
+  AUTH_SESSION_EXPIRATION_DURATION_IN_MS,
   TOKEN_TYPES,
   type EMAIL_CHANGE_CONFIRMATION_TOKEN_PAYLOAD,
 } from "../lib/constants";
+import type { Context } from "hono";
+import { setCookie } from "hono/cookie";
+import { tokenTypesEnum } from "../database/schema";
 
 export class AuthService extends BaseService {
-  public signIn(payload: { email: string; password: string }) {
+  private async createSession(user: UserInstance) {
+    const session = await user.sessions.createFirst({
+      expiresAt: new Date(Date.now() + AUTH_SESSION_EXPIRATION_DURATION_IN_MS),
+    });
+
+    return session;
+  }
+
+  private setSessionCookie(session: string, context: Context) {
+    setCookie(context, AUTH_SESSION_COOKIE_NAME, session, {
+      httpOnly: true,
+      secure: env.NODE_ENV === "production", // HTTPS only in production
+      sameSite: env.NODE_ENV === "production" ? "strict" : "lax", // Stricter in prod
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+    });
+  }
+
+  public signIn(
+    payload: { email: string; password: string },
+    context: Context
+  ) {
     return this.database.transaction(async (tx) => {
-      const user = await tx.user.findFirstOrThrow({
+      const user = await tx.user.findFirst({
         where: {
           field: {
             email: {
@@ -23,7 +50,19 @@ export class AuthService extends BaseService {
         },
       });
 
-      const password = await user.passwords.findFirstOrThrow({});
+      if (!user) {
+        throw new AppError({
+          statusCode: 409,
+          code: HTTP_ERROR_CODES.INCORRECT_EMAIL_ADDRESS_OR_PASSWORD,
+          message: "incorrect email address or password",
+        });
+      }
+
+      const password = await user.passwords.findFirst({});
+
+      if (!password) {
+        throw new Error("Every user should have a password");
+      }
 
       const isPasswordCorrect = await bcrypt.compare(
         payload.password,
@@ -32,17 +71,15 @@ export class AuthService extends BaseService {
 
       if (!isPasswordCorrect) {
         throw new AppError({
-          code: HTTP_ERROR_CODES.PASSWORD_INCORRECT,
-          message: "the password is not correct",
           statusCode: 409,
+          code: HTTP_ERROR_CODES.INCORRECT_EMAIL_ADDRESS_OR_PASSWORD,
+          message: "incorrect email address or password",
         });
       }
 
-      const session = await user.sessions.createFirst({});
+      const session = await this.createSession(user);
 
-      return {
-        session,
-      };
+      this.setSessionCookie(session.data.session, context);
     });
   }
 
@@ -65,8 +102,8 @@ export class AuthService extends BaseService {
 
       if (user) {
         throw new AppError({
-          code: HTTP_ERROR_CODES.USER_ALREADY_EXISTS,
-          message: "user already exists",
+          code: HTTP_ERROR_CODES.EMAIL_ADDRESS_IN_USE,
+          message: "a user with this email address already exists",
           statusCode: 409,
         });
       }
@@ -81,24 +118,21 @@ export class AuthService extends BaseService {
         password: hashedPassword,
       });
 
-      const token = await user.tokens.createFirst({
-        type: "email-confirmation",
-        token: crypto.randomUUID(),
+      await user.tokens.remove({
+        where: {
+          field: {
+            type: {
+              eq: TOKEN_TYPES.EMAIL_CONFIRMATION,
+            },
+          },
+        },
       });
 
-      const url = new URL("/api/auth/confirm-email-address", env.VITE_API_URL);
-      url.searchParams.set("token", token.data.token);
-
-      await this.tools.mailer.sendMail({
-        from: "auth",
-        to: [user.data.email],
-        subject: "Email confirmation",
-        html: `<a href="${url.toString()}" >Confirm email</a>`,
-      });
+      await this.sendEmailConfirmation(user);
     });
   }
 
-  public confirmEmail(payload: { token: string }) {
+  public confirmEmail(payload: { token: string }, context: Context) {
     return this.database.transaction(async (tx) => {
       const token = await tx.token.findFirst({
         where: {
@@ -110,32 +144,30 @@ export class AuthService extends BaseService {
         },
       });
 
-      if (!token) {
-        // TODO: try a redirect to an error page
-        throw new Error("");
+      if (!token || token.data.type !== "email-confirmation") {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.INVALID_CONFIRMATION_URL,
+        });
       }
 
-      if (token.data.type !== "email-confirmation") {
-        // TODO: try a redirect to an error page
-        throw new Error("");
+      if (new Date() > token.data.expiresAt) {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.CONFIRMATION_URL_EXPIRED,
+        });
       }
-
-      // remove token
-      await token.remove();
 
       const user = await token.user.findFirstOrThrow();
+      user.data.confirmedAt = new Date();
+      await Promise.all([user.save(), token.remove()]);
 
-      const session = await user.sessions.createFirst({});
-
-      return {
-        session,
-      };
+      const session = await this.createSession(user);
+      this.setSessionCookie(session.data.session, context);
     });
   }
 
   public requestPasswordReset(payload: { email: string }) {
     return this.database.transaction(async (tx) => {
-      const user = await tx.user.findFirstOrThrow({
+      const user = await tx.user.findFirst({
         where: {
           field: {
             email: {
@@ -145,9 +177,26 @@ export class AuthService extends BaseService {
         },
       });
 
+      if (!user) {
+        return;
+      }
+
+      await user.tokens.remove({
+        where: {
+          field: {
+            type: {
+              eq: TOKEN_TYPES.REQUEST_PASSWORD_RESET,
+            },
+          },
+        },
+      });
+
       const token = await user.tokens.createFirst({
         type: "request-password-reset",
         token: crypto.randomUUID(),
+        expiresAt: new Date(
+          Date.now() + AUTH_SESSION_EXPIRATION_DURATION_IN_MS
+        ),
       });
 
       const url = new URL("/reset-password", env.SERVER_CLIENT_URL);
@@ -176,9 +225,17 @@ export class AuthService extends BaseService {
 
       if (token.data.type !== "request-password-reset") {
         throw new AppError({
-          code: HTTP_ERROR_CODES.INCORRECT_TOKEN_TYPE,
           statusCode: 409,
-          message: "invalid token type",
+          message: "Invalid token",
+          code: HTTP_ERROR_CODES.INVALID_TOKEN,
+        });
+      }
+
+      if (new Date() > token.data.expiresAt) {
+        throw new AppError({
+          statusCode: 409,
+          message: "url expired",
+          code: HTTP_ERROR_CODES.URL_EXPIRED,
         });
       }
 
@@ -188,17 +245,11 @@ export class AuthService extends BaseService {
 
       const hashedPassword = await this.hashPassword(payload.password);
       await user.passwords.createFirst({ password: hashedPassword });
-
-      const session = await user.sessions.createFirst({});
-
-      return {
-        session,
-      };
     });
   }
 
-  public getAuthUser(payload: { session: string }) {
-    return this.database.transaction(async (tx) => {
+  public getAuthUser(payload: { session: string }, tx = this.database) {
+    return tx.transaction(async (tx) => {
       const session = await tx.session.findFirst({
         where: {
           field: {
@@ -209,7 +260,7 @@ export class AuthService extends BaseService {
         },
       });
 
-      if (!session) {
+      if (!session || new Date() > session.data.expiresAt) {
         throw new UnauthorizedError();
       }
 
@@ -222,8 +273,11 @@ export class AuthService extends BaseService {
     });
   }
 
-  public requestEmailChange(payload: { user: UserInstance; email: string }) {
-    return this.database.transaction(async (tx) => {
+  public requestEmailChange(
+    payload: { user: UserInstance; email: string },
+    tx = this.database
+  ) {
+    return tx.transaction(async (tx) => {
       const user = await tx.user.findFirst({
         where: {
           field: {
@@ -254,9 +308,22 @@ export class AuthService extends BaseService {
 
       const token = jwt.sign(tokenPayload, env.SERVER_JWT_SECRET);
 
+      await tokensRepo.remove({
+        where: {
+          field: {
+            type: {
+              eq: "change-email",
+            },
+          },
+        },
+      });
+
       await tokensRepo.createFirst({
         type: tokenType,
         token,
+        expiresAt: new Date(
+          Date.now() + AUTH_SESSION_EXPIRATION_DURATION_IN_MS
+        ),
       });
 
       const url = new URL("/api/auth/confirm-email-change", env.VITE_API_URL);
@@ -271,9 +338,9 @@ export class AuthService extends BaseService {
     });
   }
 
-  public changeEmail(payload: { token: string }) {
-    return this.database.transaction(async (tx) => {
-      const token = await tx.token.findFirstOrThrow({
+  public changeEmail(payload: { token: string }, tx = this.database) {
+    return tx.transaction(async (tx) => {
+      const token = await tx.token.findFirst({
         where: {
           field: {
             token: {
@@ -283,34 +350,73 @@ export class AuthService extends BaseService {
         },
       });
 
-      let tokenData = jwt.verify(
-        token.data.token,
-        env.SERVER_JWT_SECRET
-      ) as EMAIL_CHANGE_CONFIRMATION_TOKEN_PAYLOAD;
-
-      if (
-        token.data.type !== TOKEN_TYPES.CHANGE_EMAIL ||
-        tokenData.type !== TOKEN_TYPES.CHANGE_EMAIL
-      ) {
-        throw new AppError({
-          code: HTTP_ERROR_CODES.INCORRECT_TOKEN_TYPE,
-          message: "invalid token type",
-          statusCode: 409,
+      if (token?.data.type !== TOKEN_TYPES.CHANGE_EMAIL) {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.INVALID_EMAIL_CHANGE_URL,
         });
       }
 
+      if (new Date() > token.data.expiresAt) {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.EMAIL_CHANGE_URL_EXPIRED,
+        });
+      }
+
+      let tokenData;
+
+      try {
+        tokenData = jwt.verify(
+          token.data.token,
+          env.SERVER_JWT_SECRET
+        ) as EMAIL_CHANGE_CONFIRMATION_TOKEN_PAYLOAD;
+      } catch {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.INVALID_EMAIL_CHANGE_URL,
+        });
+      }
+
+      if (tokenData.type !== TOKEN_TYPES.CHANGE_EMAIL) {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.INVALID_EMAIL_CHANGE_URL,
+        });
+      }
+
+      const potentielUser = await tx.user.findFirst({
+        where: {
+          field: {
+            email: {
+              eq: tokenData.email,
+            },
+          },
+        },
+      });
+
       const user = await token.user.findFirstOrThrow();
-      user.data.email = tokenData.email;
-      await user.save();
+
+      if (potentielUser && potentielUser.data.id !== user.data.id) {
+        throw new ClientRedirectError({
+          code: HTTP_ERROR_CODES.EMAIL_CHANGE_ALREADY_IN_USE,
+        });
+      }
+
+      if (!potentielUser) {
+        user.data.email = tokenData.email;
+        await user.save();
+      }
+
+      await token.remove();
     });
   }
 
-  public changePassword(payload: {
-    user: UserInstance;
-    password: string;
-    newPassword: string;
-  }) {
-    return this.database.transaction(async (tx) => {
+  public changePassword(
+    payload: {
+      user: UserInstance;
+      password: string;
+      newPassword: string;
+    },
+    tx = this.database
+  ) {
+    return tx.transaction(async (tx) => {
       const passwordsRepo = payload.user.passwords;
       passwordsRepo.dbClient = tx.dbClient;
 
@@ -332,5 +438,59 @@ export class AuthService extends BaseService {
       password.data.password = await this.hashPassword(payload.newPassword);
       await password.save();
     });
+  }
+
+  public async resendConfirmationEmail(
+    payload: { user: UserInstance },
+    tx = this.database
+  ) {
+    return tx.transaction(async (tx) => {
+      const user = new UserInstance({
+        data: payload.user.data,
+        repo: new UserRepo({ dbClient: tx.dbClient }),
+      });
+
+      if (user.data.confirmedAt) {
+        return;
+      }
+
+      const tokenType = TOKEN_TYPES.EMAIL_CONFIRMATION;
+
+      await user.tokens.remove({
+        where: {
+          field: {
+            type: {
+              eq: tokenType,
+            },
+          },
+        },
+      });
+
+      await this.sendEmailConfirmation(user);
+    });
+  }
+
+  private async sendEmailConfirmation(user: UserInstance) {
+    const { url } = await this.createEmailConfirmationURL(user);
+
+    await this.tools.mailer.sendMail({
+      from: "auth",
+      to: [user.data.email],
+      subject: "Email confirmation",
+      html: `<a href="${url.toString()}" >Confirm email</a>`,
+    });
+  }
+
+  private async createEmailConfirmationURL(user: UserInstance) {
+    const token = await user.tokens.createFirst({
+      type: TOKEN_TYPES.EMAIL_CONFIRMATION,
+      token: crypto.randomUUID(),
+      expiresAt: new Date(Date.now() + AUTH_EMAIL_CONFIRMATION_DURATION_IN_MS),
+    });
+
+    const url = new URL("/api/auth/confirm-email-address", env.VITE_API_URL);
+    url.searchParams.set("token", token.data.token);
+
+    return { url };
   }
 }

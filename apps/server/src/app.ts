@@ -3,7 +3,7 @@ import { controller } from "./controllers";
 import { cors } from "hono/cors";
 import { env } from "./lib/env";
 import { createContext, type AppContext } from "./context";
-import { AppError } from "./lib/error";
+import { AppError, RedirectError } from "./lib/error";
 import { HTTP_ERROR_CODES } from "@saas-starter/shared-constants";
 
 export const createApp = async () => {
@@ -22,6 +22,10 @@ export const createApp = async () => {
       })
     )
     .onError((err, context) => {
+      if (err instanceof RedirectError) {
+        return context.redirect(err.redirectUrl, err.statusCode);
+      }
+
       if (err instanceof AppError) {
         return context.json(
           {

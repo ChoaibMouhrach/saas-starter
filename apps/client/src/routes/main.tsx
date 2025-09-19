@@ -1,10 +1,13 @@
-import { createRoute, redirect } from "@tanstack/react-router";
+import { createRoute, isRedirect, redirect } from "@tanstack/react-router";
 import { rootRoute } from "./root";
 import { HomePage } from "@/pages/home/page";
 import { api } from "@/api";
 import { CustomApiError } from "@/lib/base-api";
 import { ChangeEmailAddressPage } from "@/pages/(public)/change-email-address/page";
 import { ConfirmEmailPage } from "@/pages/(public)/confirm-email/page";
+import z from "zod";
+import { ErrorPage } from "@/pages/(public)/error/page";
+import { PendingEmailConfirmationPage } from "@/pages/(auth)/pending-email-confirmation/page";
 
 export const mainLayout = createRoute({
   getParentRoute: () => rootRoute,
@@ -52,8 +55,49 @@ export const confirmEmailRoute = createRoute({
 
 export const errorRoute = createRoute({
   path: "/error",
-  component: () => "error",
+  component: () => <ErrorPage />,
   getParentRoute: () => mainLayout,
+  validateSearch: z.object({
+    error: z.string().default("something went wrong"),
+  }),
+});
+
+export const pendingEmailConfirmationRoute = createRoute({
+  getParentRoute: () => mainLayout,
+  path: "/pending-email-confirmation",
+  component: () => <PendingEmailConfirmationPage />,
+  beforeLoad: async () => {
+    try {
+      const auth = await api.auth.getAuthUser();
+
+      if (auth.user.confirmedAt) {
+        throw redirect({
+          to: "/sign-in",
+        });
+      }
+
+      return auth;
+    } catch (err) {
+      if (err instanceof CustomApiError) {
+        if (err.statusCode === 401) {
+          throw redirect({ to: "/sign-in" });
+        }
+
+        throw redirect({
+          to: "/error",
+          search: {
+            error: err.code,
+          },
+        });
+      }
+
+      if (isRedirect(err)) {
+        throw err;
+      }
+
+      throw redirect({ to: "/error" });
+    }
+  },
 });
 
 export const mainRouteTree = mainLayout.addChildren([
@@ -61,4 +105,5 @@ export const mainRouteTree = mainLayout.addChildren([
   changeEmailRoute,
   confirmEmailRoute,
   errorRoute,
+  pendingEmailConfirmationRoute,
 ]);

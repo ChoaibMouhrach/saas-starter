@@ -22,6 +22,7 @@ export const createContext = async () => {
 
   const tools = {
     mailer,
+    database,
   };
 
   return {
@@ -42,6 +43,7 @@ export type AppContext = {
 export type AuthAppContext = {
   Variables: AppContext["Variables"] & {
     auth: {
+      tx: Database;
       user: UserInstance;
       session: SessionInstance;
     };

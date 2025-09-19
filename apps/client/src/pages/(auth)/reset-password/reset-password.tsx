@@ -43,8 +43,9 @@ export const ResetPassword = () => {
       });
     },
     onSuccess: () => {
+      toast.success("Password updated successfully");
       navigate({
-        to: "/",
+        to: "/sign-in",
       });
     },
     onError: (err) => {

@@ -21,9 +21,11 @@ export class SessionInstance extends BaseRepoInstance<TSessionsTable> {
   }
 }
 
-export class SessionRepo<
-  T extends Partial<TSession> = Partial<TSession>
-> extends BaseRepo<TSessionsTable, SessionInstance, T> {
+export class SessionRepo<T extends Partial<TSession> = {}> extends BaseRepo<
+  TSessionsTable,
+  SessionInstance,
+  T
+> {
   protected override table = sessionsTable;
   protected override notFoundError = new NotFoundError({
     code: HTTP_ERROR_CODES.SESSION_NOT_FOUND,

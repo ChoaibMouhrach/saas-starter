@@ -27,6 +27,10 @@ export class AuthApi extends BaseApi {
     });
   }
 
+  public resendConfirmationEmail() {
+    return this.request(apiClient.api.auth["resend-email-confirmation"].$post);
+  }
+
   public signOut() {
     return this.request(() => {
       return apiClient.api.auth["sign-out"].$post();

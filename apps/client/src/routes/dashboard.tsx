@@ -1,6 +1,11 @@
 import { rootRoute } from "./root";
 import { DashboardLayout } from "@/pages/(dashboard)/layout";
-import { createRoute, Outlet, redirect } from "@tanstack/react-router";
+import {
+  createRoute,
+  isRedirect,
+  Outlet,
+  redirect,
+} from "@tanstack/react-router";
 import { DashboardPage } from "@/pages/(dashboard)/dashboard/page";
 import { Settings } from "@/pages/(dashboard)/settings/page";
 import { api } from "@/api";
@@ -17,12 +22,23 @@ export const dashboardLayout = createRoute({
   beforeLoad: async () => {
     try {
       const auth = await api.auth.getAuthUser();
+
+      if (!auth.user.confirmedAt) {
+        throw redirect({
+          to: "/pending-email-confirmation",
+        });
+      }
+
       return auth;
     } catch (error) {
       if (error instanceof CustomApiError && error.statusCode === 401) {
         throw redirect({
           to: "/sign-in",
         });
+      }
+
+      if (isRedirect(error)) {
+        throw error;
       }
 
       throw redirect({

@@ -79,6 +79,7 @@ export const tokensTable = pgTable("tokens", {
   userId: userId(),
 
   // -- timestamps
+  expiresAt: timestamp({ mode: "date" }).notNull(),
   ...timestamps(),
 });
 
@@ -103,6 +104,7 @@ export const sessionsTable = pgTable("sessions", {
   userId: userId(),
 
   // -- timestamps
+  expiresAt: timestamp({ mode: "date" }).notNull(),
   ...timestamps(),
 });
 

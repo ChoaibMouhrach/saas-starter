@@ -8,7 +8,6 @@ import {
   redirect,
   isRedirect,
 } from "@tanstack/react-router";
-import { ConfirmEmailPage } from "@/pages/(public)/confirm-email/page";
 import { ResetPasswordPage } from "@/pages/(auth)/reset-password/page";
 import { RequestPasswordReset } from "@/pages/(auth)/request-password-reset copy/request-password-reset";
 import z from "zod";

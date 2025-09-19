@@ -26,7 +26,7 @@ import type { DbClient } from "./drizzle";
 
 export abstract class BaseRepoInstance<
   Table extends AnyPgTable & { id: AnyPgColumn },
-  TR = InferSelectModel<Table>
+  TR = InferSelectModel<Table>,
 > {
   public data;
   public repo;
@@ -69,7 +69,7 @@ export abstract class BaseRepo<
   TInstance extends BaseRepoInstance<Table>,
   TRelations extends Partial<InferSelectModel<Table>>,
   TR = InferSelectModel<Table>,
-  TRI = InferInsertModel<Table>
+  TRI = InferInsertModel<Table>,
 > {
   public dbClient;
   protected abstract notFoundError: AppError;
@@ -118,12 +118,7 @@ export abstract class BaseRepo<
 
   public async createFirst(input: OmitNonUndefined<TRI, TRelations>) {
     const recs = await this.create([input]);
-    const rec = recs.at(0);
-
-    if (!rec) {
-      // TODO: take a look
-      throw this.notFoundError;
-    }
+    const rec = recs.at(0)!;
 
     return rec;
   }
@@ -171,8 +166,10 @@ export abstract class BaseRepo<
   }
 
   public async findFirst(options?: Parameters<typeof this.find>[0]) {
-    // TODO: add limit to find later
-    const recs = await this.find(options);
+    const recs = await this.find({
+      ...options,
+      limit: 1,
+    });
     const rec = recs.at(0);
     return rec || null;
   }
