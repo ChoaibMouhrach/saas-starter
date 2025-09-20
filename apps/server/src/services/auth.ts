@@ -14,7 +14,6 @@ import {
 } from "../lib/constants";
 import type { Context } from "hono";
 import { setCookie } from "hono/cookie";
-import { tokenTypesEnum } from "../database/schema";
 
 export class AuthService extends BaseService {
   private async createSession(user: UserInstance) {

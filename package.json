@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "bun --elide-lines=0 --filter='*' dev",
-    "build": "bun --elide-lines=0 --filter='*' run build",
+    "build": "bun --filter='*' run build",
     "ts:check": "bun --elide-lines=0 --filter='*' ts:check",
     "db:generate": "bun --elide-lines=0 --filter='*' db:generate",
     "db:migrate": "bun --elide-lines=0 --filter='*' db:migrate",

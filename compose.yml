@@ -1,8 +1,8 @@
 services:
   soda-db:
     image: postgres:latest
-    container_name: ${SERVER_DATABASE_NAME}
-    restart: always
+    container_name: ${SERVER_DATABASE_USER}
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${SERVER_DATABASE_USER}
       POSTGRES_PASSWORD: ${SERVER_DATABASE_PASS}
